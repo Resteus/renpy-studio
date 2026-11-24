@@ -51,4 +51,4 @@ On its own, [`eren-coder07/RenPy-Android-Port`](https://github.com/eren-coder07/
 - **Android Runtime Port:** Built on top of the open-source ARM64/ARM32 runtime by **[eren-coder07/RenPy-Android-Port](https://github.com/eren-coder07/RenPy-Android-Port)** (Ren'Py 8.6.1).
 - **Visual Novel Engine:** Powered by **[Ren'Py](https://www.renpy.org/)** created by Tom Rothamel.
 
-See [`INSTALLATION.md`](INSTALLATION.md) for the complete Termux setup guide.
+See [`INSTALLATION.md`](INSTALLATION.md) for the complete Termux setup guide, and read [`AI_PRACTICES.md`](AI_PRACTICES.md) for AI transparency, test device specs, and disclaimers.
