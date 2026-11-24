@@ -20,6 +20,11 @@ Instead of compiling heavy C++/Java engine source code from scratch, RenPy Studi
    - Resizes optional PNG/JPG icons across all `mipmap-*` densities and adaptive foreground/background layers using Pillow.
 5. **Repackaging, Alignment & Signing:** Rebuilds resources with `apktool` + `aapt2`, aligns 4-byte boundaries with `zipalign`, signs with `apksigner` using your `.jks` keystore, and outputs timestamped APKs (`<AppName>-v<Version>-<YYYYMMDD_HHMMSS>-signed.apk`) so previous versions remain available for rollback.
 
+### Why a Universal Player APK Works as a Template
+On its own, [`eren-coder07/RenPy-Android-Port`](https://github.com/eren-coder07/RenPy-Android-Port) is a standalone universal Ren'Py launcher that runs loose project folders on Android. RenPy Studio repurposes that APK as a hollow, pre-compiled engine shell:
+- **Native Binaries Stay Untouched:** The ARM64/ARM32 C++ libraries (`lib/`), SDL2 Java launcher (`classes.dex`), and Python 3 Ren'Py runtime (`assets/x-renpy/`) are already compiled—eliminating any need for a PC, Android NDK, or Gradle.
+- **Swap & Re-Brand Only:** RenPy Studio decodes the APK once (`templates/base_decoded/`), swaps your visual novel's files into `assets/x-game/`, rewrites the Package ID, app name, and icons, and re-signs it into an independent standalone APK.
+
 ---
 
 ## Features (v1.0.0)
