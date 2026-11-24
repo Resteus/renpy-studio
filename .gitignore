@@ -1,5 +1,33 @@
-builds/
+# Signing Keystores (CRITICAL: Never commit private keys)
 keystores/
+*.jks
+*.keystore
+*.p12
+
+# Large Base Engine & Decoded Template Cache
+templates/base_engine.apk
+templates/base_decoded/
 templates/*.apk
+
+# Generated APK Builds & Temporary Workspaces
+builds/
+*.apk
+tmp/
+temp/
+
+# Python & Termux Runtime Artifacts
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+server.log
+*.pid
+
+# OS & Editor Files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
