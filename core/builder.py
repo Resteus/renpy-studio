@@ -35,52 +35,38 @@ def sanitize_package_segment(text: str) -> str:
 
 
 def make_default_package(app_name: str) -> str:
-    seg = sanitize_package_segment(app_name)
-    return f"com.renpystudio.{seg}"
+    return f"com.renpystudio.{sanitize_package_segment(app_name)}"
 
 
 def find_game_dir(root: Path) -> Path:
-    """Locate the Ren'Py game/ folder inside an extracted zip or project directory."""
     if (root / "game").is_dir():
         return root / "game"
-
     markers = {"script.rpy", "script.rpyc", "options.rpy", "options.rpyc"}
     if any((root / m).exists() for m in markers):
         return root
-
     for candidate in sorted(root.rglob("game")):
         if candidate.is_dir() and "__MACOSX" not in candidate.parts:
             if any((candidate / m).exists() for m in markers) or any(candidate.iterdir()):
                 return candidate
-
     for marker in markers:
-        found = list(root.rglob(marker))
-        for f in found:
+        for f in root.rglob(marker):
             if "__MACOSX" not in f.parts:
                 return f.parent
-
     raise FileNotFoundError("Could not find a valid Ren'Py 'game/' folder or .rpy/.rpyc scripts.")
 
 
 def parse_options(game_dir: Path) -> dict:
-    """Extract config.name and config.version from options.rpy (or fallback to folder name)."""
     fallback_name = game_dir.parent.name if game_dir.name.lower() == "game" else game_dir.name
     if not fallback_name or fallback_name.startswith("renpy_inspect_"):
         fallback_name = "RenPy Game"
 
-    info = {
-        "app_name": fallback_name,
-        "version": "1.0",
-        "numeric_version": 100,
-    }
-
+    info = {"app_name": fallback_name, "version": "1.0", "numeric_version": 100}
     options_rpy = game_dir / "options.rpy"
     if options_rpy.is_file():
         text = options_rpy.read_text(encoding="utf-8", errors="ignore")
         m_name = re.search(r'config\.name\s*=\s*(?:_\()?\s*["\']([^"\']+)["\']', text)
         if m_name:
             info["app_name"] = m_name.group(1).strip()
-
         m_ver = re.search(r'config\.version\s*=\s*["\']([^"\']+)["\']', text)
         if m_ver:
             info["version"] = m_ver.group(1).strip()
@@ -97,7 +83,6 @@ def parse_options(game_dir: Path) -> dict:
 
 
 def inspect_source(source_path: str) -> dict:
-    """Inspect a .zip archive or project folder and return detected metadata."""
     src = Path(source_path).expanduser().resolve()
     if not src.exists():
         raise FileNotFoundError(f"Source not found: {src}")
@@ -127,85 +112,131 @@ def inspect_source(source_path: str) -> dict:
 
 
 def ensure_base_template(log_fn=print):
-    """Ensure templates/base_decoded exists; decode templates/base_engine.apk if needed."""
     if BASE_DECODED_DIR.is_dir() and (BASE_DECODED_DIR / "AndroidManifest.xml").is_file():
         return
     if not BASE_ENGINE_APK.is_file():
-        raise FileNotFoundError(
-            f"Base engine APK missing at {BASE_ENGINE_APK}. "
-            "Place RenPy-8.6.1-engine-android-universal-arm32-arm64.apk there first."
-        )
+        raise FileNotFoundError(f"Base engine APK missing at {BASE_ENGINE_APK}.")
     log_fn("[1/6] Decoding base Ren'Py engine template...")
     subprocess.run(
         ["apktool", "d", "--no-src", "-f", str(BASE_ENGINE_APK), "-o", str(BASE_DECODED_DIR)],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
+        check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
     )
 
 
-def ensure_keystore(ks_path: Path, ks_pass: str, alias: str, log_fn=print):
-    """Create a default signing keystore if none exists."""
-    if ks_path.is_file():
-        return
-    ks_path.parent.mkdir(parents=True, exist_ok=True)
-    log_fn(f"[*] Generating default signing keystore at {ks_path.name}...")
-    subprocess.run(
+def create_keystore(
+    ks_name: str,
+    ks_pass: str,
+    alias: str,
+    cn: str = "RenPyStudio",
+    validity_days: int = 10000,
+    overwrite: bool = False,
+) -> Path:
+    KEYSTORES_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = re.sub(r"[^a-zA-Z0-9._-]+", "_", ks_name).strip("_") or "renpystudio.jks"
+    if not safe_name.endswith((".jks", ".keystore")):
+        safe_name += ".jks"
+    ks_path = KEYSTORES_DIR / safe_name
+
+    if ks_path.exists():
+        if not overwrite:
+            raise FileExistsError(f"Keystore '{safe_name}' already exists.")
+        ks_path.unlink()
+
+    if len(ks_pass) < 6:
+        raise ValueError("Keystore password must be at least 6 characters.")
+
+    proc = subprocess.run(
         [
-            "keytool",
-            "-genkeypair",
-            "-v",
-            "-keystore",
-            str(ks_path),
-            "-storepass",
-            ks_pass,
-            "-keypass",
-            ks_pass,
-            "-alias",
-            alias,
-            "-keyalg",
-            "RSA",
-            "-keysize",
-            "2048",
-            "-validity",
-            "10000",
-            "-dname",
-            "CN=RenPyStudio, OU=MobileDev, O=RenPyStudio, L=CDO, S=MisOr, C=PH",
+            "keytool", "-genkeypair", "-v",
+            "-keystore", str(ks_path),
+            "-storepass", ks_pass,
+            "-keypass", ks_pass,
+            "-alias", alias,
+            "-keyalg", "RSA",
+            "-keysize", "2048",
+            "-validity", str(int(validity_days)),
+            "-dname", f"CN={cn}, OU=MobileDev, O=RenPyStudio, L=CDO, S=MisOr, C=PH",
         ],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
     )
+    if proc.returncode != 0:
+        raise RuntimeError(f"keytool error:\n{proc.stdout}")
+    return ks_path
+
+
+def ensure_default_keystore(log_fn=print) -> Path:
+    KEYSTORES_DIR.mkdir(parents=True, exist_ok=True)
+    existing = list(KEYSTORES_DIR.glob("*.jks")) + list(KEYSTORES_DIR.glob("*.keystore"))
+    if existing:
+        return existing[0]
+    log_fn("[*] Generating default signing keystore (renpystudio.jks)...")
+    return create_keystore("renpystudio.jks", "renpystudio", "renpykey")
+
+
+def inspect_keystore_details(ks_name: str, ks_pass: str) -> dict:
+    ks_path = KEYSTORES_DIR / Path(ks_name).name
+    if not ks_path.is_file():
+        raise FileNotFoundError(f"Keystore not found: {ks_name}")
+    proc = subprocess.run(
+        ["keytool", "-list", "-v", "-keystore", str(ks_path), "-storepass", ks_pass],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+    )
+    if proc.returncode != 0:
+        raise ValueError("Wrong password or unreadable keystore.")
+    out = proc.stdout
+    aliases = re.findall(r"Alias name:\s*(.+)", out)
+    sha256_m = re.search(r"SHA256:\s*([A-F0-9:]+)", out)
+    valid_m = re.search(r"Valid from:\s*(.+)", out)
+    return {
+        "name": ks_path.name,
+        "aliases": [a.strip() for a in aliases] or ["renpykey"],
+        "sha256": sha256_m.group(1).strip() if sha256_m else "Unknown",
+        "valid": valid_m.group(1).strip() if valid_m else "Unknown",
+    }
+
+
+def list_keystores() -> list:
+    ensure_default_keystore()
+    items = []
+    files = sorted(
+        list(KEYSTORES_DIR.glob("*.jks")) + list(KEYSTORES_DIR.glob("*.keystore")),
+        key=lambda p: p.name.lower(),
+    )
+    for f in files:
+        entry = {
+            "name": f.name,
+            "size_kb": round(f.stat().st_size / 1024, 1),
+            "default_alias": "renpykey" if f.name == "renpystudio.jks" else "",
+            "default_pass": "renpystudio" if f.name == "renpystudio.jks" else "",
+            "sha256": "",
+        }
+        if f.name == "renpystudio.jks":
+            try:
+                info = inspect_keystore_details(f.name, "renpystudio")
+                entry["default_alias"] = info["aliases"][0]
+                entry["sha256"] = info["sha256"]
+            except Exception:
+                pass
+        items.append(entry)
+    return items
 
 
 def copy_game_with_x_prefix(src_game: Path, dst_x_game: Path) -> int:
-    """Copy Ren'Py game assets into assets/x-game/ with 'x-' prefixed on every path component."""
     if dst_x_game.exists():
         shutil.rmtree(dst_x_game)
     dst_x_game.mkdir(parents=True, exist_ok=True)
-
     copied = 0
     for root, dirs, files in os.walk(src_game):
         rel_root = Path(root).relative_to(src_game)
-        # Filter ignored directories in-place
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
-
         x_parts = [f"x-{part}" for part in rel_root.parts]
         target_dir = dst_x_game.joinpath(*x_parts) if x_parts else dst_x_game
         target_dir.mkdir(parents=True, exist_ok=True)
-
         for fname in files:
-            if fname in SKIP_FILES or fname.startswith("."):
+            if fname in SKIP_FILES or fname.startswith(".") or Path(fname).suffix.lower() in SKIP_EXTS:
                 continue
-            if Path(fname).suffix.lower() in SKIP_EXTS:
-                continue
-            src_file = Path(root) / fname
-            dst_file = target_dir / f"x-{fname}"
-            shutil.copy2(src_file, dst_file)
+            shutil.copy2(Path(root) / fname, target_dir / f"x-{fname}")
             copied += 1
-
     return copied
 
 
@@ -216,19 +247,21 @@ def patch_manifest_and_metadata(
     version_name: str,
     version_code: int,
     orientation: str,
+    min_sdk: int,
+    target_sdk: int,
 ):
-    # 1. AndroidManifest.xml
+    # 1. AndroidManifest.xml — replace ALL org.renpy.engine occurrences (package, providers, permissions)
     manifest_file = work_dir / "AndroidManifest.xml"
     manifest = manifest_file.read_text(encoding="utf-8")
-    manifest = manifest.replace('package="org.renpy.engine"', f'package="{package_id}"')
-    manifest = manifest.replace("org.renpy.engine.fileprovider", f"{package_id}.fileprovider")
-    manifest = manifest.replace(
-        "org.renpy.engine.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
-        f"{package_id}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
-    )
+    manifest = manifest.replace("org.renpy.engine", package_id)
     manifest = re.sub(
         r'android:screenOrientation="[^"]+"',
         f'android:screenOrientation="{orientation}"',
+        manifest,
+    )
+    manifest = re.sub(
+        r'android:compileSdkVersion="\d+"',
+        f'android:compileSdkVersion="{target_sdk}"',
         manifest,
     )
     manifest_file.write_text(manifest, encoding="utf-8")
@@ -257,9 +290,11 @@ def patch_manifest_and_metadata(
         data["numeric_version"] = version_code
         android_json_file.write_text(json.dumps(data, indent=4), encoding="utf-8")
 
-    # 4. apktool.yml
+    # 4. apktool.yml (Min API, Target API, Version Code & Name)
     yml_file = work_dir / "apktool.yml"
     yml = yml_file.read_text(encoding="utf-8")
+    yml = re.sub(r"(minSdkVersion:\s*)\d+", rf"\g<1>{min_sdk}", yml)
+    yml = re.sub(r"(targetSdkVersion:\s*)\d+", rf"\g<1>{target_sdk}", yml)
     yml = re.sub(r"(versionCode:\s*)\d+", rf"\g<1>{version_code}", yml)
     yml = re.sub(r"(versionName:\s*).+", rf"\g<1>{version_name}", yml)
     yml_file.write_text(yml, encoding="utf-8")
@@ -269,10 +304,7 @@ def apply_custom_icon(work_dir: Path, icon_path: str, log_fn=print):
     if not icon_path:
         return
     src_img_path = Path(icon_path).expanduser().resolve()
-    if not src_img_path.is_file():
-        return
-    if Image is None:
-        log_fn("[!] Pillow (PIL) not found; skipping custom icon resize.")
+    if not src_img_path.is_file() or Image is None:
         return
 
     log_fn("[*] Generating multi-DPI Android app icons...")
@@ -285,25 +317,19 @@ def apply_custom_icon(work_dir: Path, icon_path: str, log_fn=print):
     }
 
     with Image.open(src_img_path).convert("RGBA") as img:
-        # Sample corner pixel for clean adaptive background fill
         bg_color = img.getpixel((0, 0))
         for folder, (legacy_px, adaptive_px) in densities.items():
             out_dir = work_dir / "res" / folder
             if not out_dir.is_dir():
                 continue
-            legacy_icon = img.resize((legacy_px, legacy_px), Image.Resampling.LANCZOS)
-            legacy_icon.save(out_dir / "icon.png", format="PNG")
-
-            # Adaptive foreground padded to safe zone (66% inner area)
+            img.resize((legacy_px, legacy_px), Image.Resampling.LANCZOS).save(out_dir / "icon.png", format="PNG")
             fg_canvas = Image.new("RGBA", (adaptive_px, adaptive_px), (0, 0, 0, 0))
             inner_px = int(adaptive_px * 0.66)
             offset = (adaptive_px - inner_px) // 2
             fg_resized = img.resize((inner_px, inner_px), Image.Resampling.LANCZOS)
             fg_canvas.paste(fg_resized, (offset, offset), fg_resized)
             fg_canvas.save(out_dir / "icon_foreground.png", format="PNG")
-
-            bg_canvas = Image.new("RGBA", (adaptive_px, adaptive_px), bg_color)
-            bg_canvas.save(out_dir / "icon_background.png", format="PNG")
+            Image.new("RGBA", (adaptive_px, adaptive_px), bg_color).save(out_dir / "icon_background.png", format="PNG")
 
 
 def run_cmd(cmd: list, step_label: str):
@@ -320,6 +346,8 @@ def build_apk(
     version_name: str = "1.0",
     version_code: int = 100,
     orientation: str = "sensorLandscape",
+    min_sdk: int = 23,
+    target_sdk: int = 36,
     icon_path: str = "",
     keystore_name: str = "renpystudio.jks",
     keystore_pass: str = "renpystudio",
@@ -327,11 +355,12 @@ def build_apk(
     copy_to_downloads: bool = True,
     log_fn=print,
 ) -> dict:
-    """Build, zipalign, and sign a standalone Ren'Py Android APK."""
     ensure_base_template(log_fn=log_fn)
+    ensure_default_keystore(log_fn=log_fn)
 
-    ks_path = KEYSTORES_DIR / keystore_name
-    ensure_keystore(ks_path, keystore_pass, key_alias, log_fn=log_fn)
+    ks_path = KEYSTORES_DIR / Path(keystore_name).name
+    if not ks_path.is_file():
+        raise FileNotFoundError(f"Selected keystore '{keystore_name}' not found.")
 
     BUILDS_DIR.mkdir(parents=True, exist_ok=True)
     work_root = Path(tempfile.mkdtemp(prefix="renpy_build_"))
@@ -361,7 +390,7 @@ def build_apk(
             raise RuntimeError("No valid game files found inside the game/ folder.")
         log_fn(f"      Bundled {file_count} game files into assets/x-game/")
 
-        log_fn(f"[4/6] Patching manifest ({package_id}) & app metadata...")
+        log_fn(f"[4/6] Patching manifest ({package_id} | API {min_sdk}->{target_sdk})...")
         patch_manifest_and_metadata(
             work_dir=app_work,
             app_name=app_name,
@@ -369,12 +398,13 @@ def build_apk(
             version_name=version_name,
             version_code=int(version_code),
             orientation=orientation,
+            min_sdk=int(min_sdk),
+            target_sdk=int(target_sdk),
         )
         apply_custom_icon(app_work, icon_path, log_fn=log_fn)
 
         unaligned_apk = work_root / "unaligned.apk"
         aligned_apk = work_root / "aligned.apk"
-
         safe_slug = re.sub(r"[^a-zA-Z0-9._-]+", "_", app_name).strip("_") or "RenPyGame"
         out_filename = f"{safe_slug}-v{version_name}-signed.apk"
         final_apk = BUILDS_DIR / out_filename
@@ -382,20 +412,15 @@ def build_apk(
         log_fn("[5/6] Compiling APK resources with apktool & aapt2...")
         run_cmd(["apktool", "b", str(app_work), "-o", str(unaligned_apk)], "apktool build")
 
-        log_fn("[6/6] Aligning (zipalign) & signing (apksigner)...")
+        log_fn(f"[6/6] Aligning & signing with {ks_path.name} (alias: {key_alias})...")
         run_cmd(["zipalign", "-f", "-p", "4", str(unaligned_apk), str(aligned_apk)], "zipalign")
         run_cmd(
             [
-                "apksigner",
-                "sign",
-                "--ks",
-                str(ks_path),
-                "--ks-pass",
-                f"pass:{keystore_pass}",
-                "--ks-key-alias",
-                key_alias,
-                "--out",
-                str(final_apk),
+                "apksigner", "sign",
+                "--ks", str(ks_path),
+                "--ks-pass", f"pass:{keystore_pass}",
+                "--ks-key-alias", key_alias,
+                "--out", str(final_apk),
                 str(aligned_apk),
             ],
             "apksigner",
@@ -412,12 +437,9 @@ def build_apk(
 
         size_mb = round(final_apk.stat().st_size / (1024 * 1024), 2)
         log_fn(f"[✓] Build complete! {out_filename} ({size_mb} MB)")
-
         return {
             "status": "success",
             "filename": out_filename,
-            "apk_path": str(final_apk),
-            "downloads_path": downloads_path,
             "size_mb": size_mb,
             "files_bundled": file_count,
             "package_id": package_id,
