@@ -353,6 +353,7 @@ def build_apk(
     keystore_pass: str = "renpystudio",
     key_alias: str = "renpykey",
     copy_to_downloads: bool = True,
+    enable_exit_dialog: bool = True,
     log_fn=print,
 ) -> dict:
     ensure_base_template(log_fn=log_fn)
@@ -389,6 +390,9 @@ def build_apk(
         if file_count == 0:
             raise RuntimeError("No valid game files found inside the game/ folder.")
         log_fn(f"      Bundled {file_count} game files into assets/x-game/")
+        if enable_exit_dialog:
+            inject_exit_dialog(app_work / "assets" / "x-game")
+            log_fn("      Injected Android Back-button exit confirmation dialog")
 
         log_fn(f"[4/6] Patching manifest ({package_id} | API {min_sdk}->{target_sdk})...")
         patch_manifest_and_metadata(
@@ -446,3 +450,69 @@ def build_apk(
         }
     finally:
         shutil.rmtree(work_root, ignore_errors=True)
+
+
+EXIT_HOOK_RPY = """# Auto-injected by RenPy Studio: Android Back-button exit confirmation
+init 999 python:
+    config.quit_action = Quit(confirm=True)
+    if "_renpystudio_exit_hook" not in config.overlay_screens:
+        config.overlay_screens.append("_renpystudio_exit_hook")
+
+screen _renpystudio_exit_hook():
+    zorder 999
+    if not renpy.get_screen("confirm"):
+        key "K_AC_BACK" action Quit(confirm=True)
+"""
+
+
+def inject_exit_dialog(dst_x_game: Path):
+    hook_file = dst_x_game / "x-zz_android_exit.rpy"
+    hook_file.write_text(EXIT_HOOK_RPY, encoding="utf-8")
+
+
+def inspect_built_apk(filename: str) -> dict:
+    safe_name = Path(filename).name
+    target = BUILDS_DIR / safe_name
+    if not target.is_file():
+        raise FileNotFoundError("APK not found.")
+    badging = subprocess.run(
+        ["aapt2", "dump", "badging", str(target)],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+    ).stdout
+    pkg_m = re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'", badging)
+    sdk_m = re.search(r"sdkVersion:'(\d+)'", badging)
+    tgt_m = re.search(r"targetSdkVersion:'(\d+)'", badging)
+    lbl_m = re.search(r"application-label:'([^']+)'", badging)
+    return {
+        "filename": safe_name,
+        "size_mb": round(target.stat().st_size / (1024 * 1024), 2),
+        "app_name": lbl_m.group(1) if lbl_m else "Unknown",
+        "package_id": pkg_m.group(1) if pkg_m else "Unknown",
+        "version_code": pkg_m.group(2) if pkg_m else "?",
+        "version_name": pkg_m.group(3) if pkg_m else "?",
+        "min_sdk": sdk_m.group(1) if sdk_m else "?",
+        "target_sdk": tgt_m.group(1) if tgt_m else "?",
+    }
+
+
+def rename_built_apk(old_name: str, new_name: str) -> str:
+    src = BUILDS_DIR / Path(old_name).name
+    if not src.is_file():
+        raise FileNotFoundError("Original APK not found.")
+    clean = re.sub(r"[^a-zA-Z0-9._-]+", "_", new_name.strip()).strip("_")
+    if not clean:
+        raise ValueError("Invalid new filename.")
+    if not clean.lower().endswith(".apk"):
+        clean += ".apk"
+    dst = BUILDS_DIR / clean
+    if dst.exists():
+        raise FileExistsError(f"'{clean}' already exists.")
+    src.rename(dst)
+    return clean
+
+
+def delete_built_apk(filename: str):
+    target = BUILDS_DIR / Path(filename).name
+    if not target.is_file():
+        raise FileNotFoundError("APK not found.")
+    target.unlink()

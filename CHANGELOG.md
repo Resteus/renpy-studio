@@ -39,3 +39,7 @@ All notable changes to **RenPy Studio** will be documented in this file.
 - Redesigned `web/index.html` into a 3-tab mobile interface (`Build`, `Keystore`, `Builds`).
 - Added Minimum API (`minSdk`) and Target API (`targetSdk`) inputs for Play Store API target updates (36, 37, 38+).
 - Added Keystore Management tab (inspect SHA-256/aliases, generate new `.jks`, import existing keystores, and download `.jks` backups).
+
+### Added (Builder v3 — Exit Dialog & APK CRUD)
+- Added automatic injection of `zz_android_exit.rpy` (`K_AC_BACK` -> `Quit(confirm=True)`) so pressing Android's Back button opens Ren'Py's native quit confirmation dialog.
+- Added `inspect_built_apk`, `rename_built_apk`, and `delete_built_apk` helpers in `core/builder.py`.
