@@ -453,12 +453,22 @@ def build_apk(
         shutil.rmtree(work_root, ignore_errors=True)
 
 
-EXIT_HOOK_RPY = '# Auto-injected by RenPy Studio: Double-Tap Android Back -> Exit Dialog\ninit 1000 python:\n    import time as _rs_time\n    _rs_last_back = 0.0\n    config.quit_action = Quit(confirm=True)\n\n    def _rs_on_back():\n        global _rs_last_back\n        if renpy.get_screen("confirm"):\n            renpy.hide_screen("confirm")\n            renpy.restart_interaction()\n            return\n        now = _rs_time.time()\n        if now - _rs_last_back <= 2.0:\n            _rs_last_back = 0.0\n            renpy.hide_screen("_rs_back_toast")\n            renpy.run(Quit(confirm=True))\n        else:\n            _rs_last_back = now\n            renpy.show_screen("_rs_back_toast")\n            renpy.restart_interaction()\n\n    def _rs_install_back_keymap():\n        for _k, _vals in list(config.keymap.items()):\n            if isinstance(_vals, list):\n                config.keymap[_k] = [_v for _v in _vals if "K_AC_BACK" not in str(_v)]\n        _km = renpy.Keymap(K_AC_BACK=_rs_on_back, any_K_AC_BACK=_rs_on_back)\n        config.underlay = [_u for _u in config.underlay if getattr(_u, "_rs_tag", "") != "back_exit"]\n        _km._rs_tag = "back_exit"\n        config.underlay.insert(0, _km)\n\n    if _rs_install_back_keymap not in config.start_callbacks:\n        config.start_callbacks.append(_rs_install_back_keymap)\n    if _rs_install_back_keymap not in config.after_load_callbacks:\n        config.after_load_callbacks.append(_rs_install_back_keymap)\n\nscreen _rs_back_toast():\n    zorder 1000\n    timer 2.0 action Hide("_rs_back_toast")\n    frame:\n        xalign 0.5\n        yalign 0.92\n        background "#11161dE6"\n        padding (24, 12)\n        text "Press Back again to exit" size 26 color "#FFFFFF"\n'
+EXIT_HOOK_RPY = '# Auto-injected by RenPy Studio: Double-Tap Android Back -> Exit Dialog\ninit 1000 python:\n    import time as _rs_time\n    _rs_last_back = 0.0\n    config.quit_action = Quit(confirm=True)\n\n    def _rs_on_back():\n        global _rs_last_back\n        if renpy.get_screen("confirm"):\n            renpy.hide_screen("confirm")\n            renpy.restart_interaction()\n            return\n        now = _rs_time.time()\n        if now - _rs_last_back <= 2.0:\n            _rs_last_back = 0.0\n            renpy.hide_screen("_rs_back_toast")\n            renpy.run(Quit(confirm=True))\n        else:\n            _rs_last_back = now\n            renpy.show_screen("_rs_back_toast")\n            renpy.restart_interaction()\n\n    for _k, _vals in list(config.keymap.items()):\n        if isinstance(_vals, list):\n            config.keymap[_k] = [_v for _v in _vals if "K_AC_BACK" not in str(_v)]\n\n    config.keymap["_rs_back"] = ["K_AC_BACK"]\n    _rs_km = renpy.Keymap(_rs_back=_rs_on_back)\n    config.underlay = [_u for _u in config.underlay if getattr(_u, "_rs_tag", "") != "back_exit"]\n    _rs_km._rs_tag = "back_exit"\n    config.underlay.insert(0, _rs_km)\n\nscreen _rs_back_toast():\n    zorder 1000\n    timer 2.0 action Hide("_rs_back_toast")\n    frame:\n        xalign 0.5\n        yalign 0.92\n        background "#11161dE6"\n        padding (24, 12)\n        text "Press Back again to exit" size 26 color "#FFFFFF"\n'
 
 
 def inject_exit_dialog(dst_x_game: Path):
     hook_file = dst_x_game / "x-zz_android_exit.rpy"
     hook_file.write_text(EXIT_HOOK_RPY, encoding="utf-8")
+    screens_file = dst_x_game / "x-screens.rpy"
+    if screens_file.is_file():
+        s_txt = screens_file.read_text(encoding="utf-8", errors="ignore")
+        s_txt_new = re.sub(
+            r'if\s+renpy\.variant\(["\']pc["\']\)\s*:',
+            'if renpy.variant("pc") or renpy.variant("android"):',
+            s_txt,
+        )
+        if s_txt_new != s_txt:
+            screens_file.write_text(s_txt_new, encoding="utf-8")
 
 
 def inspect_built_apk(filename: str) -> dict:
