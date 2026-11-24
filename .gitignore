@@ -1,0 +1,5 @@
+builds/
+keystores/
+templates/*.apk
+__pycache__/
+*.pyc
