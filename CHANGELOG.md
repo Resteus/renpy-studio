@@ -34,3 +34,8 @@ All notable changes to **RenPy Studio** will be documented in this file.
 - Fixed `.apk.html` browser download bug by serving APKs with explicit `application/vnd.android.package-archive` MIME type.
 - Added API level parameters (`min_sdk`, `target_sdk`) and signing keystore parameters to `/api/build`.
 - Added Key Management endpoints (`/api/keystores`, `/api/keystores/create`, `/api/keystores/inspect`, `/api/keystores/upload`, `/api/keystores/download/<filename>`).
+
+### Added & Fixed (Web UI v2)
+- Redesigned `web/index.html` into a 3-tab mobile interface (`Build`, `Keystore`, `Builds`).
+- Added Minimum API (`minSdk`) and Target API (`targetSdk`) inputs for Play Store API target updates (36, 37, 38+).
+- Added Keystore Management tab (inspect SHA-256/aliases, generate new `.jks`, import existing keystores, and download `.jks` backups).
