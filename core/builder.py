@@ -452,17 +452,7 @@ def build_apk(
         shutil.rmtree(work_root, ignore_errors=True)
 
 
-EXIT_HOOK_RPY = """# Auto-injected by RenPy Studio: Android Back-button exit confirmation
-init 999 python:
-    config.quit_action = Quit(confirm=True)
-    if "_renpystudio_exit_hook" not in config.overlay_screens:
-        config.overlay_screens.append("_renpystudio_exit_hook")
-
-screen _renpystudio_exit_hook():
-    zorder 999
-    if not renpy.get_screen("confirm"):
-        key "K_AC_BACK" action Quit(confirm=True)
-"""
+EXIT_HOOK_RPY = '# Auto-injected by RenPy Studio: Android Back-button exit confirmation\ninit 1000 python:\n    config.quit_action = Quit(confirm=True)\n    for _k, _vals in list(config.keymap.items()):\n        if isinstance(_vals, list):\n            config.keymap[_k] = [_v for _v in _vals if "K_AC_BACK" not in str(_v)]\n    config.keymap["quit"] = ["K_AC_BACK"]\n    if "_renpystudio_exit_hook" not in config.overlay_screens:\n        config.overlay_screens.append("_renpystudio_exit_hook")\n\nscreen _renpystudio_exit_hook():\n    zorder 999\n    if not renpy.get_screen("confirm"):\n        key "K_AC_BACK" action Quit(confirm=True)\n'
 
 
 def inject_exit_dialog(dst_x_game: Path):
