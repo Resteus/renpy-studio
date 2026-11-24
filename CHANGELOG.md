@@ -29,3 +29,8 @@ All notable changes to **RenPy Studio** will be documented in this file.
 - Fixed package installation conflict (`INSTALL_FAILED_CONFLICTING_PROVIDER`) by replacing all `org.renpy.engine` provider authorities (including `androidx-startup`) in `AndroidManifest.xml`.
 - Added configurable `min_sdk` and `target_sdk` patching (`apktool.yml` and `compileSdkVersion`) for future Google Play API levels (36, 37, 38+).
 - Added keystore management helpers (`list_keystores`, `create_keystore`, `inspect_keystore_details`).
+
+### Fixed & Added (Server v2)
+- Fixed `.apk.html` browser download bug by serving APKs with explicit `application/vnd.android.package-archive` MIME type.
+- Added API level parameters (`min_sdk`, `target_sdk`) and signing keystore parameters to `/api/build`.
+- Added Key Management endpoints (`/api/keystores`, `/api/keystores/create`, `/api/keystores/inspect`, `/api/keystores/upload`, `/api/keystores/download/<filename>`).

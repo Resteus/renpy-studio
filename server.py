@@ -1,6 +1,6 @@
+import mimetypes
 import os
 import re
-import shutil
 import threading
 import time
 import uuid
@@ -13,11 +13,15 @@ from waitress import serve
 
 from core.builder import (
     BUILDS_DIR,
+    KEYSTORES_DIR,
     build_apk,
+    create_keystore,
+    inspect_keystore_details,
     inspect_source,
+    list_keystores,
 )
 
-# Allow large Ren'Py project ZIP uploads (up to 1 GB)
+mimetypes.add_type("application/vnd.android.package-archive", ".apk")
 bottle.BaseRequest.MEMFILE_MAX = 1024 * 1024 * 1024
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -26,15 +30,8 @@ UPLOADS_DIR = BUILDS_DIR / "_uploads"
 RENPY_PROJECTS_DIR = Path.home() / "storage" / "shared" / "RenPyProjects"
 
 app = bottle.Bottle()
-
 BUILD_LOCK = threading.Lock()
-BUILD_STATE = {
-    "running": False,
-    "logs": [],
-    "result": None,
-    "error": None,
-    "started_at": None,
-}
+BUILD_STATE = {"running": False, "logs": [], "result": None, "error": None}
 
 
 def append_log(line: str):
@@ -44,8 +41,7 @@ def append_log(line: str):
 
 
 def sanitize_filename(name: str) -> str:
-    cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "_", name).strip("_")
-    return cleaned or "upload.bin"
+    return re.sub(r"[^a-zA-Z0-9._-]+", "_", name).strip("_") or "upload.bin"
 
 
 @app.get("/")
@@ -54,24 +50,19 @@ def index():
 
 
 @app.get("/api/projects")
-def list_local_projects():
+def api_projects():
     projects = []
     if RENPY_PROJECTS_DIR.is_dir():
         for entry in sorted(RENPY_PROJECTS_DIR.iterdir(), key=lambda p: p.name.lower()):
             if entry.is_dir() and not entry.name.startswith("."):
-                has_game = (entry / "game").is_dir() or any(entry.glob("*.rpy")) or any(entry.glob("*.rpyc"))
-                if has_game:
-                    projects.append({
-                        "name": entry.name,
-                        "path": str(entry),
-                    })
-    return {"projects": projects, "base_dir": str(RENPY_PROJECTS_DIR)}
+                if (entry / "game").is_dir() or any(entry.glob("*.rpy")) or any(entry.glob("*.rpyc")):
+                    projects.append({"name": entry.name, "path": str(entry)})
+    return {"projects": projects}
 
 
 @app.post("/api/inspect/local")
 def api_inspect_local():
-    data = request.json or {}
-    raw_path = (data.get("path") or "").strip()
+    raw_path = ((request.json or {}).get("path") or "").strip()
     if not raw_path:
         response.status = 400
         return {"error": "Project path is required."}
@@ -87,29 +78,90 @@ def api_inspect_local():
 @app.post("/api/inspect/zip")
 def api_inspect_zip():
     upload = request.files.get("zip_file")
-    if not upload or not upload.filename:
+    if not upload or not upload.filename or not upload.filename.lower().endswith(".zip"):
         response.status = 400
-        return {"error": "Please choose a .zip file to upload."}
-
-    if not upload.filename.lower().endswith(".zip"):
-        response.status = 400
-        return {"error": "Only .zip archives are supported."}
+        return {"error": "Please select a valid .zip archive."}
 
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    safe_name = sanitize_filename(upload.filename)
-    saved_path = UPLOADS_DIR / f"{uuid.uuid4().hex[:8]}_{safe_name}"
-
+    saved_path = UPLOADS_DIR / f"{uuid.uuid4().hex[:8]}_{sanitize_filename(upload.filename)}"
     try:
         upload.save(str(saved_path), overwrite=True)
         meta = inspect_source(str(saved_path))
         meta["source_path"] = str(saved_path)
-        meta["zip_name"] = upload.filename
         return {"status": "ok", "meta": meta}
     except Exception as e:
-        if saved_path.exists():
-            saved_path.unlink(missing_ok=True)
+        saved_path.unlink(missing_ok=True)
         response.status = 400
         return {"error": str(e)}
+
+
+@app.get("/api/keystores")
+def api_keystores():
+    return {"keystores": list_keystores()}
+
+
+@app.post("/api/keystores/create")
+def api_create_keystore():
+    data = request.json or {}
+    name = (data.get("name") or "").strip()
+    password = (data.get("password") or "").strip()
+    alias = (data.get("alias") or "").strip()
+    cn = (data.get("cn") or "RenPyStudio").strip()
+    overwrite = bool(data.get("overwrite", False))
+    try:
+        validity = int(data.get("validity_days") or 10000)
+    except ValueError:
+        validity = 10000
+
+    if not name or not password or not alias:
+        response.status = 400
+        return {"error": "Keystore filename, password, and alias are required."}
+    try:
+        ks_path = create_keystore(name, password, alias, cn=cn, validity_days=validity, overwrite=overwrite)
+        return {"status": "ok", "filename": ks_path.name}
+    except Exception as e:
+        response.status = 400
+        return {"error": str(e)}
+
+
+@app.post("/api/keystores/inspect")
+def api_inspect_keystore():
+    data = request.json or {}
+    name = (data.get("name") or "").strip()
+    password = (data.get("password") or "").strip()
+    if not name or not password:
+        response.status = 400
+        return {"error": "Select a keystore and enter its password."}
+    try:
+        return {"status": "ok", "details": inspect_keystore_details(name, password)}
+    except Exception as e:
+        response.status = 400
+        return {"error": str(e)}
+
+
+@app.post("/api/keystores/upload")
+def api_upload_keystore():
+    upload = request.files.get("ks_file")
+    if not upload or not upload.filename:
+        response.status = 400
+        return {"error": "Choose a .jks or .keystore file."}
+    KEYSTORES_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = sanitize_filename(upload.filename)
+    if not safe_name.endswith((".jks", ".keystore")):
+        safe_name += ".jks"
+    target = KEYSTORES_DIR / safe_name
+    upload.save(str(target), overwrite=True)
+    return {"status": "ok", "filename": safe_name}
+
+
+@app.get("/api/keystores/download/<filename>")
+def api_download_keystore(filename):
+    safe_name = Path(filename).name
+    target = KEYSTORES_DIR / safe_name
+    if not target.is_file():
+        response.status = 404
+        return {"error": "Keystore not found."}
+    return static_file(safe_name, root=str(KEYSTORES_DIR), download=safe_name, mimetype="application/octet-stream")
 
 
 @app.post("/api/build")
@@ -117,48 +169,46 @@ def api_start_build():
     with BUILD_LOCK:
         if BUILD_STATE["running"]:
             response.status = 409
-            return {"error": "A build is already running. Please wait for it to finish."}
+            return {"error": "A build is already running."}
 
     source_path = (request.forms.get("source_path") or "").strip()
     app_name = (request.forms.get("app_name") or "").strip()
     package_id = (request.forms.get("package_id") or "").strip()
     version_name = (request.forms.get("version_name") or "1.0").strip()
     orientation = (request.forms.get("orientation") or "sensorLandscape").strip()
-    copy_dl_raw = (request.forms.get("copy_to_downloads") or "true").strip().lower()
-    copy_to_downloads = copy_dl_raw in ("1", "true", "yes", "on")
+    ks_name = (request.forms.get("keystore_name") or "renpystudio.jks").strip()
+    ks_pass = (request.forms.get("keystore_pass") or "renpystudio").strip()
+    key_alias = (request.forms.get("key_alias") or "renpykey").strip()
+    copy_dl = (request.forms.get("copy_to_downloads") or "true").strip().lower() in ("1", "true", "yes", "on")
 
     try:
         version_code = int(request.forms.get("version_code") or 100)
+        min_sdk = int(request.forms.get("min_sdk") or 23)
+        target_sdk = int(request.forms.get("target_sdk") or 36)
     except ValueError:
-        version_code = 100
+        response.status = 400
+        return {"error": "Version Code, Minimum API, and Target API must be numbers."}
 
     if not source_path or not Path(source_path).exists():
         response.status = 400
-        return {"error": "Project source not found. Select a project or import a .zip first."}
-
+        return {"error": "Load a .zip archive or project folder first."}
     if not app_name:
         response.status = 400
         return {"error": "App Name is required."}
-
     if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$", package_id):
         response.status = 400
-        return {"error": "Invalid Package ID. Use format like com.studio.gamename"}
+        return {"error": "Invalid Package ID (use format like com.studio.gamename)."}
 
     icon_saved_path = ""
     icon_upload = request.files.get("icon_file")
     if icon_upload and icon_upload.filename:
         UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-        icon_name = sanitize_filename(icon_upload.filename)
-        icon_target = UPLOADS_DIR / f"icon_{uuid.uuid4().hex[:8]}_{icon_name}"
+        icon_target = UPLOADS_DIR / f"icon_{uuid.uuid4().hex[:8]}_{sanitize_filename(icon_upload.filename)}"
         icon_upload.save(str(icon_target), overwrite=True)
         icon_saved_path = str(icon_target)
 
     with BUILD_LOCK:
-        BUILD_STATE["running"] = True
-        BUILD_STATE["logs"] = []
-        BUILD_STATE["result"] = None
-        BUILD_STATE["error"] = None
-        BUILD_STATE["started_at"] = time.time()
+        BUILD_STATE.update({"running": True, "logs": [], "result": None, "error": None})
 
     def worker():
         try:
@@ -170,8 +220,13 @@ def api_start_build():
                 version_name=version_name,
                 version_code=version_code,
                 orientation=orientation,
+                min_sdk=min_sdk,
+                target_sdk=target_sdk,
                 icon_path=icon_saved_path,
-                copy_to_downloads=copy_to_downloads,
+                keystore_name=ks_name,
+                keystore_pass=ks_pass,
+                key_alias=key_alias,
+                copy_to_downloads=copy_dl,
                 log_fn=append_log,
             )
             with BUILD_LOCK:
@@ -193,24 +248,19 @@ def api_start_build():
 @app.get("/api/build/status")
 def api_build_status():
     with BUILD_LOCK:
-        return {
-            "running": BUILD_STATE["running"],
-            "logs": list(BUILD_STATE["logs"]),
-            "result": BUILD_STATE["result"],
-            "error": BUILD_STATE["error"],
-        }
+        return dict(BUILD_STATE)
 
 
 @app.get("/api/builds")
-def api_list_builds():
+def api_builds():
     BUILDS_DIR.mkdir(parents=True, exist_ok=True)
     apks = []
     for f in sorted(BUILDS_DIR.glob("*.apk"), key=lambda p: p.stat().st_mtime, reverse=True):
-        stat = f.stat()
+        st = f.stat()
         apks.append({
             "filename": f.name,
-            "size_mb": round(stat.st_size / (1024 * 1024), 2),
-            "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+            "size_mb": round(st.st_size / (1024 * 1024), 2),
+            "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
         })
     return {"builds": apks}
 
@@ -222,7 +272,12 @@ def download_apk(filename):
     if not target.is_file() or target.suffix.lower() != ".apk":
         response.status = 404
         return {"error": "APK file not found."}
-    return static_file(safe_name, root=str(BUILDS_DIR), download=safe_name)
+    return static_file(
+        safe_name,
+        root=str(BUILDS_DIR),
+        download=safe_name,
+        mimetype="application/vnd.android.package-archive",
+    )
 
 
 if __name__ == "__main__":
