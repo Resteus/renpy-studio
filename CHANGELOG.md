@@ -43,3 +43,7 @@ All notable changes to **RenPy Studio** will be documented in this file.
 ### Added (Builder v3 — Exit Dialog & APK CRUD)
 - Added automatic injection of `zz_android_exit.rpy` (`K_AC_BACK` -> `Quit(confirm=True)`) so pressing Android's Back button opens Ren'Py's native quit confirmation dialog.
 - Added `inspect_built_apk`, `rename_built_apk`, and `delete_built_apk` helpers in `core/builder.py`.
+
+### Added (Server v3 — Exit Dialog & Builds CRUD API)
+- Passed `enable_exit_dialog` option into `build_apk()` via `/api/build`.
+- Added APK management endpoints: `/api/builds/inspect`, `/api/builds/rename`, `/api/builds/delete`, and `/api/builds/clear`.

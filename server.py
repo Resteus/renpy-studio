@@ -2,7 +2,6 @@ import mimetypes
 import os
 import re
 import threading
-import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -16,9 +15,12 @@ from core.builder import (
     KEYSTORES_DIR,
     build_apk,
     create_keystore,
+    delete_built_apk,
+    inspect_built_apk,
     inspect_keystore_details,
     inspect_source,
     list_keystores,
+    rename_built_apk,
 )
 
 mimetypes.add_type("application/vnd.android.package-archive", ".apk")
@@ -149,8 +151,7 @@ def api_upload_keystore():
     safe_name = sanitize_filename(upload.filename)
     if not safe_name.endswith((".jks", ".keystore")):
         safe_name += ".jks"
-    target = KEYSTORES_DIR / safe_name
-    upload.save(str(target), overwrite=True)
+    upload.save(str(KEYSTORES_DIR / safe_name), overwrite=True)
     return {"status": "ok", "filename": safe_name}
 
 
@@ -180,6 +181,7 @@ def api_start_build():
     ks_pass = (request.forms.get("keystore_pass") or "renpystudio").strip()
     key_alias = (request.forms.get("key_alias") or "renpykey").strip()
     copy_dl = (request.forms.get("copy_to_downloads") or "true").strip().lower() in ("1", "true", "yes", "on")
+    exit_dlg = (request.forms.get("enable_exit_dialog") or "true").strip().lower() in ("1", "true", "yes", "on")
 
     try:
         version_code = int(request.forms.get("version_code") or 100)
@@ -227,6 +229,7 @@ def api_start_build():
                 keystore_pass=ks_pass,
                 key_alias=key_alias,
                 copy_to_downloads=copy_dl,
+                enable_exit_dialog=exit_dlg,
                 log_fn=append_log,
             )
             with BUILD_LOCK:
@@ -263,6 +266,50 @@ def api_builds():
             "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
         })
     return {"builds": apks}
+
+
+@app.post("/api/builds/inspect")
+def api_inspect_build():
+    filename = ((request.json or {}).get("filename") or "").strip()
+    try:
+        return {"status": "ok", "details": inspect_built_apk(filename)}
+    except Exception as e:
+        response.status = 400
+        return {"error": str(e)}
+
+
+@app.post("/api/builds/rename")
+def api_rename_build():
+    data = request.json or {}
+    old_name = (data.get("old_name") or "").strip()
+    new_name = (data.get("new_name") or "").strip()
+    try:
+        renamed = rename_built_apk(old_name, new_name)
+        return {"status": "ok", "filename": renamed}
+    except Exception as e:
+        response.status = 400
+        return {"error": str(e)}
+
+
+@app.post("/api/builds/delete")
+def api_delete_build():
+    filename = ((request.json or {}).get("filename") or "").strip()
+    try:
+        delete_built_apk(filename)
+        return {"status": "ok"}
+    except Exception as e:
+        response.status = 400
+        return {"error": str(e)}
+
+
+@app.post("/api/builds/clear")
+def api_clear_builds():
+    BUILDS_DIR.mkdir(parents=True, exist_ok=True)
+    removed = 0
+    for f in BUILDS_DIR.glob("*.apk"):
+        f.unlink(missing_ok=True)
+        removed += 1
+    return {"status": "ok", "removed": removed}
 
 
 @app.get("/download/<filename>")
