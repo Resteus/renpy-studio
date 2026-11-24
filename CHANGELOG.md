@@ -51,3 +51,8 @@ All notable changes to **RenPy Studio** will be documented in this file.
 ### Added (Web UI v3 — Exit Dialog Toggle & Builds CRUD)
 - Added `Enable Android Back-button exit confirmation dialog` toggle to the **Build** tab.
 - Added full APK CRUD controls (**Download**, **Inspect**, **Rename**, **Delete**, and **Clear All**) to the **Builds** tab.
+
+### Fixed & Added (Builder v4 — Double-Tap Exit & Version History)
+- Replaced single-key overlay hook with `config.underlay` `Keymap` registered via `start_callbacks` and `after_load_callbacks` so `K_AC_BACK` no longer triggers `rollback`.
+- Added Double-Tap Android Back behavior: first tap shows a 2-second `"Press Back again to exit"` toast, and a second tap within 2 seconds opens Ren'Py's native quit confirmation dialog.
+- Added timestamp suffixes (`YYYYMMDD_HHMMSS`) to built APK filenames so every version (`v1.0`, `v1.1`, `v1.2`) is preserved for rollback.
