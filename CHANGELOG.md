@@ -47,3 +47,7 @@ All notable changes to **RenPy Studio** will be documented in this file.
 ### Added (Server v3 — Exit Dialog & Builds CRUD API)
 - Passed `enable_exit_dialog` option into `build_apk()` via `/api/build`.
 - Added APK management endpoints: `/api/builds/inspect`, `/api/builds/rename`, `/api/builds/delete`, and `/api/builds/clear`.
+
+### Added (Web UI v3 — Exit Dialog Toggle & Builds CRUD)
+- Added `Enable Android Back-button exit confirmation dialog` toggle to the **Build** tab.
+- Added full APK CRUD controls (**Download**, **Inspect**, **Rename**, **Delete**, and **Clear All**) to the **Builds** tab.

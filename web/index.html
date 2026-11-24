@@ -8,7 +8,7 @@
     :root {
       --bg: #0d1117; --card: #161b22; --alt: #1f2630; --border: #30363d;
       --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
-      --green: #238636; --green-hi: #2ea043; --red: #f85149;
+      --green: #238636; --green-hi: #2ea043; --red: #da3633; --red-bg: #3d1418;
     }
     * { box-sizing: border-box; }
     body {
@@ -24,7 +24,9 @@
     .nav-btn { background: transparent; color: var(--muted); border: none; border-radius: 8px; padding: 10px 6px; font-size: 14px; font-weight: 700; cursor: pointer; }
     .nav-btn.active { background: var(--alt); color: var(--accent); }
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+    .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .card-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 0 0 10px 0; }
+    .card-head .card-title { margin: 0; }
     .sub-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
     .sub-btn { background: var(--bg); color: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 9px; font-size: 13px; font-weight: 600; cursor: pointer; }
     .sub-btn.active { background: var(--alt); color: var(--accent); border-color: var(--accent); }
@@ -38,7 +40,7 @@
     input:focus, select:focus { border-color: var(--accent); }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .row { display: flex; gap: 8px; align-items: center; }
-    .chk { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); }
+    .chk { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); margin-bottom: 6px; }
     .chk input { width: 17px; height: 17px; accent-color: var(--green-hi); }
     .btn {
       width: 100%; min-height: 44px; border: none; border-radius: 9px; font-size: 14px; font-weight: 700;
@@ -58,9 +60,18 @@
     }
     .item-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
     .item-row:last-child { border-bottom: none; padding-bottom: 0; }
-    .item-name { font-size: 13px; font-weight: 600; word-break: break-all; }
+    .build-card { padding: 11px 0; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+    .build-card:last-child { border-bottom: none; padding-bottom: 0; }
+    .item-name { font-size: 13px; font-weight: 700; word-break: break-all; }
     .item-sub { font-size: 12px; color: var(--muted); }
-    .dl-btn { flex-shrink: 0; padding: 7px 11px; border-radius: 7px; background: var(--alt); border: 1px solid var(--border); color: var(--accent); font-size: 12px; font-weight: 700; text-decoration: none; }
+    .act-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .act-btn {
+      padding: 8px 4px; border-radius: 7px; background: var(--alt); border: 1px solid var(--border);
+      color: var(--text); font-size: 12px; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer;
+    }
+    .act-btn.primary { color: var(--accent); border-color: #58a6ff55; }
+    .act-btn.danger { color: #ffa198; background: var(--red-bg); border-color: #da363366; }
+    .mini-danger { padding: 5px 10px; border-radius: 7px; background: var(--red-bg); border: 1px solid #da363366; color: #ffa198; font-size: 12px; font-weight: 700; cursor: pointer; }
     .hidden { display: none; }
   </style>
 </head>
@@ -158,6 +169,10 @@
         </div>
         <div class="field">
           <label class="chk">
+            <input type="checkbox" id="exitDialog" checked />
+            <span>Enable Android Back-button exit confirmation dialog</span>
+          </label>
+          <label class="chk">
             <input type="checkbox" id="copyDownloads" checked />
             <span>Copy signed APK to Downloads folder</span>
           </label>
@@ -221,10 +236,14 @@
       </div>
     </section>
 
-    <!-- TAB 3: BUILDS -->
+    <!-- TAB 3: BUILDS (CRUD) -->
     <section id="viewBuilds" class="hidden" style="flex-direction:column;gap:12px;">
       <div class="card">
-        <div class="card-title">Signed APKs</div>
+        <div class="card-head">
+          <div class="card-title">Built APKs Manager</div>
+          <button type="button" class="mini-danger" onclick="clearAllBuilds()">Clear All</button>
+        </div>
+        <div id="buildCrudMsg" class="pill hidden" style="margin-top:0;margin-bottom:10px;"></div>
         <div id="buildsList" class="item-sub">No APKs built yet.</div>
       </div>
     </section>
@@ -239,8 +258,7 @@
       ['build', 'keystore', 'builds'].forEach(t => {
         const cap = t.charAt(0).toUpperCase() + t.slice(1);
         document.getElementById('nav' + cap).classList.toggle('active', t === tab);
-        const sec = document.getElementById('view' + cap);
-        sec.style.display = (t === tab) ? 'flex' : 'none';
+        document.getElementById('view' + cap).style.display = (t === tab) ? 'flex' : 'none';
       });
       if (tab === 'builds') refreshBuilds();
       if (tab === 'keystore') loadKeystores();
@@ -349,7 +367,7 @@
               <div class="item-name">${k.name}</div>
               <div class="item-sub">${k.size_kb} KB ${k.default_alias ? '• alias: ' + k.default_alias : ''}</div>
             </div>
-            <a class="dl-btn" href="/api/keystores/download/${encodeURIComponent(k.name)}">Backup</a>
+            <a class="act-btn primary" style="padding:7px 12px;" href="/api/keystores/download/${encodeURIComponent(k.name)}">Backup</a>
           `;
           list.appendChild(row);
         });
@@ -433,6 +451,7 @@
       form.append('keystore_name', document.getElementById('buildKsSelect').value);
       form.append('key_alias', document.getElementById('buildKeyAlias').value.trim());
       form.append('keystore_pass', document.getElementById('buildKeyPass').value);
+      form.append('enable_exit_dialog', document.getElementById('exitDialog').checked ? 'true' : 'false');
       form.append('copy_to_downloads', document.getElementById('copyDownloads').checked ? 'true' : 'false');
 
       const icon = document.getElementById('iconInput').files[0];
@@ -489,18 +508,76 @@
         }
         box.innerHTML = '';
         data.builds.forEach(b => {
-          const row = document.createElement('div');
-          row.className = 'item-row';
-          row.innerHTML = `
+          const card = document.createElement('div');
+          card.className = 'build-card';
+          card.innerHTML = `
             <div>
               <div class="item-name">${b.filename}</div>
               <div class="item-sub">${b.size_mb} MB • ${b.modified}</div>
             </div>
-            <a class="dl-btn" href="/download/${encodeURIComponent(b.filename)}" download="${b.filename}">Download</a>
+            <div class="act-grid">
+              <a class="act-btn primary" href="/download/${encodeURIComponent(b.filename)}" download="${b.filename}">Download</a>
+              <button type="button" class="act-btn" onclick="inspectBuild('${b.filename}')">Inspect</button>
+              <button type="button" class="act-btn" onclick="renameBuild('${b.filename}')">Rename</button>
+              <button type="button" class="act-btn danger" onclick="deleteBuild('${b.filename}')">Delete</button>
+            </div>
           `;
-          box.appendChild(row);
+          box.appendChild(card);
         });
       } catch (e) {}
+    }
+
+    async function inspectBuild(filename) {
+      setPill('buildCrudMsg', `Inspecting ${filename}...`);
+      try {
+        const res = await fetch('/api/builds/inspect', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename })
+        });
+        const data = await res.json();
+        if (!res.ok) return setPill('buildCrudMsg', data.error || 'Inspect failed.', 'err');
+        const d = data.details;
+        setPill('buildCrudMsg', `${d.app_name} (${d.package_id}) • v${d.version_name} (${d.version_code}) • API ${d.min_sdk} → ${d.target_sdk} • ${d.size_mb} MB`, 'ok');
+      } catch (e) { setPill('buildCrudMsg', e.message, 'err'); }
+    }
+
+    async function renameBuild(oldName) {
+      const next = prompt('New APK filename:', oldName);
+      if (!next || next.trim() === oldName) return;
+      try {
+        const res = await fetch('/api/builds/rename', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ old_name: oldName, new_name: next.trim() })
+        });
+        const data = await res.json();
+        if (!res.ok) return setPill('buildCrudMsg', data.error || 'Rename failed.', 'err');
+        setPill('buildCrudMsg', `Renamed to ${data.filename}`, 'ok');
+        refreshBuilds();
+      } catch (e) { setPill('buildCrudMsg', e.message, 'err'); }
+    }
+
+    async function deleteBuild(filename) {
+      if (!confirm(`Delete ${filename}?`)) return;
+      try {
+        const res = await fetch('/api/builds/delete', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename })
+        });
+        const data = await res.json();
+        if (!res.ok) return setPill('buildCrudMsg', data.error || 'Delete failed.', 'err');
+        setPill('buildCrudMsg', `Deleted ${filename}.`, 'ok');
+        refreshBuilds();
+      } catch (e) { setPill('buildCrudMsg', e.message, 'err'); }
+    }
+
+    async function clearAllBuilds() {
+      if (!confirm('Delete ALL built APKs in RenPy Studio?')) return;
+      try {
+        const res = await fetch('/api/builds/clear', { method: 'POST' });
+        const data = await res.json();
+        setPill('buildCrudMsg', `Cleared ${data.removed || 0} APK(s).`, 'ok');
+        refreshBuilds();
+      } catch (e) { setPill('buildCrudMsg', e.message, 'err'); }
     }
 
     loadProjects();
