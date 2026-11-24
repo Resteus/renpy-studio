@@ -20,3 +20,7 @@ All notable changes to **RenPy Studio** will be documented in this file.
 - Added `.zip` upload and inspection (`/api/inspect/zip`) supporting archives up to 1 GB.
 - Added local `RenPyProjects` scanner (`/api/projects` and `/api/inspect/local`) for direct folder builds.
 - Added background APK build queue (`/api/build`, `/api/build/status`) with live log polling and APK download endpoints (`/api/builds`, `/download/<filename>`).
+
+### Added (Mobile Web UI)
+- Created mobile-first dark interface at `web/index.html` with `.zip` project upload and `RenPyProjects` folder picker.
+- Added auto-syncing Package ID slug generator, orientation selector, custom icon uploader, live scrolling build console, and one-tap APK downloads.

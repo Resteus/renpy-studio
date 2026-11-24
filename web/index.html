@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RenPy Studio — Android APK Builder</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --card-alt: #1f2630;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --green: #238636;
+      --green-hover: #2ea043;
+      --red: #f85149;
+      --yellow: #d29922;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 14px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    .container {
+      max-width: 560px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 2px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    .badge {
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--card-alt);
+      border: 1px solid var(--border);
+      color: var(--accent);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--muted);
+      margin: 0 0 12px 0;
+    }
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .tab-btn {
+      background: var(--bg);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: var(--card-alt);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .field {
+      margin-bottom: 12px;
+    }
+    .field:last-child {
+      margin-bottom: 0;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+    input[type="text"],
+    input[type="number"],
+    select,
+    input[type="file"] {
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      outline: none;
+    }
+    input:focus, select:focus {
+      border-color: var(--accent);
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .row-inline {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--text);
+      margin-top: 4px;
+    }
+    .checkbox-row input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--green-hover);
+    }
+    .btn {
+      width: 100%;
+      min-height: 46px;
+      border: none;
+      border-radius: 9px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--green);
+      color: #fff;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: var(--green-hover);
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: var(--card-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      min-height: 40px;
+      font-size: 13px;
+    }
+    .status-pill {
+      margin-top: 10px;
+      padding: 9px 11px;
+      border-radius: 8px;
+      font-size: 13px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      word-break: break-word;
+    }
+    .status-pill.ok {
+      border-color: #2ea04366;
+      color: #7ee787;
+    }
+    .status-pill.err {
+      border-color: #f8514966;
+      color: #ffa198;
+    }
+    .log-box {
+      background: #090c10;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      height: 210px;
+      overflow-y: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #c9d1d9;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .build-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .build-item:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .build-meta {
+      min-width: 0;
+    }
+    .build-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      word-break: break-all;
+    }
+    .build-sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .dl-btn {
+      flex-shrink: 0;
+      padding: 8px 12px;
+      border-radius: 7px;
+      background: var(--card-alt);
+      border: 1px solid var(--border);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>RenPy Studio</h1>
+      <span class="badge">Ren'Py 8.6.1 ARM64</span>
+    </header>
+
+    <div class="card">
+      <div class="card-title">1. Project Source</div>
+      <div class="tabs">
+        <button type="button" class="tab-btn active" id="tabZip" onclick="switchTab('zip')">Import .ZIP</button>
+        <button type="button" class="tab-btn" id="tabLocal" onclick="switchTab('local')">RenPyProjects</button>
+      </div>
+
+      <div id="paneZip">
+        <div class="field">
+          <label for="zipInput">Select Ren'Py Project Archive (.zip)</label>
+          <input type="file" id="zipInput" accept=".zip,application/zip" onchange="handleZipUpload()" />
+        </div>
+      </div>
+
+      <div id="paneLocal" class="hidden">
+        <div class="field">
+          <label for="projectSelect">Detected Projects in Storage</label>
+          <div class="row-inline">
+            <select id="projectSelect"></select>
+            <button type="button" class="btn btn-secondary" style="width:auto;padding:0 14px;" onclick="inspectSelectedLocal()">Load</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="sourceStatus" class="status-pill">No project loaded yet. Import a .zip or load a project folder.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2. APK Configuration</div>
+      <input type="hidden" id="sourcePath" />
+
+      <div class="field">
+        <label for="appName">App Name</label>
+        <input type="text" id="appName" placeholder="My Visual Novel" oninput="onAppNameInput()" />
+      </div>
+
+      <div class="field">
+        <label for="packageId">Android Package ID</label>
+        <input type="text" id="packageId" placeholder="com.renpystudio.myvisualnovel" oninput="pkgManuallyEdited = true" />
+      </div>
+
+      <div class="grid-2 field">
+        <div>
+          <label for="versionName">Version Name</label>
+          <input type="text" id="versionName" value="1.0" />
+        </div>
+        <div>
+          <label for="versionCode">Version Code</label>
+          <input type="number" id="versionCode" value="100" min="1" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="orientation">Screen Orientation</label>
+        <select id="orientation">
+          <option value="sensorLandscape" selected>Landscape (Auto-Rotate)</option>
+          <option value="landscape">Landscape (Locked)</option>
+          <option value="portrait">Portrait (Locked)</option>
+          <option value="sensorPortrait">Portrait (Auto-Rotate)</option>
+          <option value="fullSensor">Full Sensor (Both)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="iconInput">Custom App Icon (Optional PNG/JPG)</label>
+        <input type="file" id="iconInput" accept="image/*" />
+      </div>
+
+      <div class="field">
+        <label class="checkbox-row">
+          <input type="checkbox" id="copyDownloads" checked />
+          <span>Copy signed APK to Downloads folder</span>
+        </label>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <button type="button" class="btn btn-primary" id="buildBtn" onclick="startBuild()">Build Signed APK</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3. Build Console</div>
+      <div id="logBox" class="log-box">Ready. Waiting for build job...</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4. Built APKs</div>
+      <div id="buildsList" class="build-sub">No APKs built yet.</div>
+    </div>
+  </div>
+
+  <script>
+    let pkgManuallyEdited = false;
+    let pollTimer = null;
+
+    function switchTab(mode) {
+      const isZip = mode === 'zip';
+      document.getElementById('tabZip').classList.toggle('active', isZip);
+      document.getElementById('tabLocal').classList.toggle('active', !isZip);
+      document.getElementById('paneZip').classList.toggle('hidden', !isZip);
+      document.getElementById('paneLocal').classList.toggle('hidden', isZip);
+    }
+
+    function setStatus(msg, type = '') {
+      const el = document.getElementById('sourceStatus');
+      el.textContent = msg;
+      el.className = 'status-pill' + (type ? ' ' + type : '');
+    }
+
+    function slugifyPackage(name) {
+      let clean = name.toLowerCase().replace(/[^a-z0-9_]/g, '');
+      if (!clean) clean = 'game';
+      if (/^[0-9]/.test(clean)) clean = 'g_' + clean;
+      return 'com.renpystudio.' + clean;
+    }
+
+    function onAppNameInput() {
+      if (!pkgManuallyEdited) {
+        const val = document.getElementById('appName').value.trim();
+        document.getElementById('packageId').value = slugifyPackage(val);
+      }
+    }
+
+    function applyMetadata(meta, label) {
+      document.getElementById('sourcePath').value = meta.source_path || '';
+      document.getElementById('appName').value = meta.app_name || 'RenPy Game';
+      document.getElementById('packageId').value = meta.package_id || slugifyPackage(meta.app_name || 'game');
+      document.getElementById('versionName').value = meta.version || '1.0';
+      document.getElementById('versionCode').value = meta.numeric_version || 100;
+      pkgManuallyEdited = false;
+      setStatus(`Loaded ${label} — ${meta.file_count} game files detected.`, 'ok');
+    }
+
+    async function handleZipUpload() {
+      const input = document.getElementById('zipInput');
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+      setStatus(`Uploading and inspecting ${file.name}...`);
+
+      const form = new FormData();
+      form.append('zip_file', file);
+
+      try {
+        const res = await fetch('/api/inspect/zip', { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) {
+          setStatus(data.error || 'Failed to inspect ZIP.', 'err');
+          return;
+        }
+        applyMetadata(data.meta, file.name);
+      } catch (err) {
+        setStatus('Upload error: ' + err.message, 'err');
+      }
+    }
+
+    async function loadLocalProjects() {
+      try {
+        const res = await fetch('/api/projects');
+        const data = await res.json();
+        const sel = document.getElementById('projectSelect');
+        sel.innerHTML = '';
+        if (!data.projects || data.projects.length === 0) {
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = 'No projects found in RenPyProjects';
+          sel.appendChild(opt);
+          return;
+        }
+        data.projects.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.path;
+          opt.textContent = p.name;
+          sel.appendChild(opt);
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function inspectSelectedLocal() {
+      const sel = document.getElementById('projectSelect');
+      if (!sel.value) return;
+      setStatus(`Inspecting ${sel.options[sel.selectedIndex].text}...`);
+      try {
+        const res = await fetch('/api/inspect/local', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: sel.value })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setStatus(data.error || 'Failed to inspect project.', 'err');
+          return;
+        }
+        applyMetadata(data.meta, sel.options[sel.selectedIndex].text);
+      } catch (err) {
+        setStatus('Error: ' + err.message, 'err');
+      }
+    }
+
+    async function startBuild() {
+      const sourcePath = document.getElementById('sourcePath').value.trim();
+      const appName = document.getElementById('appName').value.trim();
+      const packageId = document.getElementById('packageId').value.trim();
+      const versionName = document.getElementById('versionName').value.trim() || '1.0';
+      const versionCode = document.getElementById('versionCode').value.trim() || '100';
+      const orientation = document.getElementById('orientation').value;
+      const copyDownloads = document.getElementById('copyDownloads').checked;
+
+      if (!sourcePath) {
+        setStatus('Load a .zip archive or project folder first.', 'err');
+        return;
+      }
+
+      const form = new FormData();
+      form.append('source_path', sourcePath);
+      form.append('app_name', appName);
+      form.append('package_id', packageId);
+      form.append('version_name', versionName);
+      form.append('version_code', versionCode);
+      form.append('orientation', orientation);
+      form.append('copy_to_downloads', copyDownloads ? 'true' : 'false');
+
+      const iconInput = document.getElementById('iconInput');
+      if (iconInput.files && iconInput.files[0]) {
+        form.append('icon_file', iconInput.files[0]);
+      }
+
+      const btn = document.getElementById('buildBtn');
+      btn.disabled = true;
+      btn.textContent = 'Building APK...';
+      document.getElementById('logBox').textContent = 'Starting build job...\n';
+
+      try {
+        const res = await fetch('/api/build', { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) {
+          document.getElementById('logBox').textContent = '[ERROR] ' + (data.error || 'Build failed to start.');
+          btn.disabled = false;
+          btn.textContent = 'Build Signed APK';
+          return;
+        }
+        startPolling();
+      } catch (err) {
+        document.getElementById('logBox').textContent = '[ERROR] ' + err.message;
+        btn.disabled = false;
+        btn.textContent = 'Build Signed APK';
+      }
+    }
+
+    function startPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        try {
+          const res = await fetch('/api/build/status');
+          const data = await res.json();
+          const box = document.getElementById('logBox');
+          if (data.logs && data.logs.length > 0) {
+            box.textContent = data.logs.join('\n');
+            box.scrollTop = box.scrollHeight;
+          }
+          if (!data.running) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+            const btn = document.getElementById('buildBtn');
+            btn.disabled = false;
+            btn.textContent = 'Build Signed APK';
+            refreshBuilds();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }, 1000);
+    }
+
+    async function refreshBuilds() {
+      try {
+        const res = await fetch('/api/builds');
+        const data = await res.json();
+        const container = document.getElementById('buildsList');
+        if (!data.builds || data.builds.length === 0) {
+          container.textContent = 'No APKs built yet.';
+          return;
+        }
+        container.innerHTML = '';
+        data.builds.forEach(b => {
+          const row = document.createElement('div');
+          row.className = 'build-item';
+          row.innerHTML = `
+            <div class="build-meta">
+              <div class="build-name">${b.filename}</div>
+              <div class="build-sub">${b.size_mb} MB • ${b.modified}</div>
+            </div>
+            <a class="dl-btn" href="/download/${encodeURIComponent(b.filename)}">Download</a>
+          `;
+          container.appendChild(row);
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    loadLocalProjects();
+    refreshBuilds();
+  </script>
+</body>
+</html>
